@@ -146,7 +146,8 @@ of Homebridge (scènes als HomeKit-schakelaars).
 - Git: repo op `main`, remote origin = https://github.com/CharterWim/TapoController (waarschijnlijk openbaar).
   Systeem-git is 2.7 (oud, geen browserlogin): pushen met fine-grained token in de pop-up, of via Visual Studio.
   .gitignore houdt devices/ en discovery.json (GPS, SSID, MAC's, device-ID's) en logs buiten git.
-- Stap 4 (klaar, nog niet visueel beoordeeld): **Tuinverlichting.Scenes**
+- Stap 4 (klaar; scenedemo 60/20 s visueel beoordeeld door Wim: "mooi", 2026-11-11, gedimd ×0,6 na 22:00;
+  13/13 lampen, 0 fouten, ~275 updates per lamp, max latency ~1,1 s): **Tuinverlichting.Scenes**
   - `Effect` (abstract record, JSON-polymorf via "type": golf/vuur/vast): `WaveEffect` (HueMin/Max, Saturation,
     BrightnessMin/Max, PeriodS, Wavelength, Direction Forward/Backward/FromLantern/ToLantern), `FireEffect`
     (value noise 2D, 2 octaven, TimeScaleS 8, SpatialScale 0,35 → buren gecorreleerd, Seed), `StaticEffect`.
