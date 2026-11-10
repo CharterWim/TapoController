@@ -1,0 +1,18 @@
+# Build-uitvoer
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+
+# Gegenereerde apparaatdata: bevat GPS-locatie, wifi-naam (SSID), MAC-adressen en apparaat-ID's.
+# Opnieuw te maken met `TapoProbe discover` en `TapoProbe login`.
+discovery.json
+devices/
+
+# Testlogs
+*.log
+wavemark-*.csv
+
+# Wachtwoorden staan in user secrets (buiten de repo), nooit hier.
+secrets.json
