@@ -1,33 +1,18 @@
 // Commando's voor alle schuttinglampen tegelijk, via de Tuinverlichting.Tapo-library.
 //   connectall            alle lampen uit lamps.json parallel verbinden, naam/model/stand tonen (verandert niets)
-//   fencewave [periode s=30] [duur s=90]
+//   fencewave [periode s=10] [duur s=90] [interval ms] [tint min] [tint max] [golflengte]
 //                         blauwe golf die langs de schutting loopt (L01 -> L13), interactief gestart
+//   scenedemo [deel s=60] [crossfade s=20]
+//                         scène-engine: golf vanuit de lantaarn -> vuur -> golf L01->L13, met crossfades
 
 using System.Diagnostics;
-using System.Text.Json;
 using System.Text.Json.Nodes;
+using Tuinverlichting.Scenes;
 using Tuinverlichting.Tapo;
 
-record LampConfig(string Name, string Ip, string Zone, double Pos, int MaxBrightness = 100);
-record GardenConfig(LampConfig[] Lamps, LampConfig[] Lanterns);
-
-static class Fence
+static partial class Fence
 {
-    public static GardenConfig LoadConfig()
-    {
-        // lamps.json zoeken vanaf de huidige map omhoog, dan vanaf de exe omhoog
-        foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
-        {
-            for (var dir = new DirectoryInfo(start); dir is not null; dir = dir.Parent)
-            {
-                var f = Path.Combine(dir.FullName, "lamps.json");
-                if (File.Exists(f))
-                    return JsonSerializer.Deserialize<GardenConfig>(File.ReadAllText(f),
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
-            }
-        }
-        throw new FileNotFoundException("lamps.json niet gevonden");
-    }
+    static GardenConfig LoadConfig() => GardenConfig.Find();
 
     record Connected(LampConfig Config, TapoLamp Lamp, JsonNode Info, long LoginMs);
 

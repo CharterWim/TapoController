@@ -12,7 +12,7 @@ using Tuinverlichting.Tapo.Tpap;
 
 namespace Tuinverlichting.Tapo;
 
-public sealed class TapoLamp : IAsyncDisposable
+public sealed class TapoLamp : ILightOutput, IAsyncDisposable
 {
     readonly string _password;
     readonly SemaphoreSlim _gate = new(1, 1);

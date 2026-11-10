@@ -71,12 +71,20 @@ switch (command)
                 args.Length > 5 ? double.Parse(args[5]) : 240,
                 args.Length > 6 ? double.Parse(args[6]) : 10)
             : 1;
+    case "scenedemo":
+        // scenedemo [deel s=60] [crossfade s=20]
+        return Password() is { } pw3
+            ? await Fence.SceneDemoCommand(pw3,
+                args.Length > 1 ? double.Parse(args[1]) : 60,
+                args.Length > 2 ? double.Parse(args[2]) : 20)
+            : 1;
     default:
         Console.WriteLine("Gebruik: TapoProbe discover [broadcast] | selftest | login [ip ...] | control <ip>\n" +
                           "         | fade <ip> <hue> <sat> <bri> [transition] | wave <ip> [periode s] [interval ms] [transition ms] [duur s]\n" +
                           "         | raw <ip> <method> [json] [wait ms] ...\n" +
                           "         | wavemark <ip> [periode] [interval] [duur] [beide|tint|hel] | fadetest <ip> [duur]\n" +
-                          "         | connectall | fencewave [periode s=10] [duur s=90] [interval ms=700] [tint min=190] [tint max=240] [golflengte=10]");
+                          "         | connectall | fencewave [periode s=10] [duur s=90] [interval ms=700] [tint min=190] [tint max=240] [golflengte=10]\n" +
+                          "         | scenedemo [deel s=60] [crossfade s=20]");
         return 1;
 }
 

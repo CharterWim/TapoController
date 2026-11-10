@@ -143,5 +143,23 @@ of Homebridge (scènes als HomeKit-schakelaars).
     0 fouten, ~15% van de updates "ongewijzigd" (niet verstuurd), max latency <0,9 s. Diepblauw (tot 240)
     stoort bij dit tempo niet. → Ontwerpregel bevestigd: per-lamp hue-snelheid ≲ ~5°/s houden
     (hier 2π·25/30 ≈ 5,2°/s); snelle beweging maken via lange golflengte, niet via korte periode.
-- Daarna: scène-engine (effect = f(positie, tijd), crossfades, avondcurve, vuur), ASP.NET Core-host met API en
-  portal, deploy naar Pi 3. Open: echte posities in meters, L535-gedrag, DHCP-reserveringen.
+- Git: repo op `main`, remote origin = https://github.com/CharterWim/TapoController (waarschijnlijk openbaar).
+  Systeem-git is 2.7 (oud, geen browserlogin): pushen met fine-grained token in de pop-up, of via Visual Studio.
+  .gitignore houdt devices/ en discovery.json (GPS, SSID, MAC's, device-ID's) en logs buiten git.
+- Stap 4 (klaar, nog niet visueel beoordeeld): **Tuinverlichting.Scenes**
+  - `Effect` (abstract record, JSON-polymorf via "type": golf/vuur/vast): `WaveEffect` (HueMin/Max, Saturation,
+    BrightnessMin/Max, PeriodS, Wavelength, Direction Forward/Backward/FromLantern/ToLantern), `FireEffect`
+    (value noise 2D, 2 octaven, TimeScaleS 8, SpatialScale 0,35 → buren gecorreleerd, Seed), `StaticEffect`.
+  - `SceneEngine`: per lamp per stap effect op t+Lookahead (1 s) → crossfade (smoothstep) → avondcurve
+    (22:00–23:00 naar ×0,6, tot 06:00 gedimd) → zoneplafond → snelheidsbegrenzer (6°/s tint, 10%/s sat,
+    4%/s helderheid t.o.v. vorige uitvoer). Eerste effect fadet vanuit de huidige lampkleur (SetInitialState).
+    `RunAsync` stuurt gespreid (Interval 700 ms / aantal lampen). ComputeStep/ComputeFrame zijn puur → testbaar.
+  - `GardenConfig`/`LampConfig` (lamps.json) verhuisd naar Scenes; `ILightOutput` (in Tapo) wordt door TapoLamp
+    geïmplementeerd zodat de engine met nep-uitgangen te testen is.
+  - Tests: 30 totaal (16 nieuw: effecten, crossfade, plafond, avondcurve, begrenzer incl. 360°-wrap, JSON).
+  - `TapoProbe scenedemo [deel s=60] [crossfade s=20]`: golf vanuit lantaarn → vuur → golf L01→L13.
+    Droge run 3×4 s: 13/13, 0 fouten, alles teruggezet.
+  - L01 kwam na de stroomreset terug op standaardstand (bri 100, hue 302, sat 14); handmatig op 338/19/33 gezet.
+- Daarna: ASP.NET Core-host met API (POST /api/scenes/{naam}/start, /api/stop) en portal, scènes als JSON,
+  lantaarns in scènes (crossfade van/naar warm wit), deploy naar Pi 3.
+  Open: echte posities in meters, L535-gedrag, DHCP-reserveringen.

@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Tuinverlichting.Tapo\Tuinverlichting.Tapo.csproj" />
+    <ProjectReference Include="..\Tuinverlichting.Scenes\Tuinverlichting.Scenes.csproj" />
   </ItemGroup>
 
 </Project>
