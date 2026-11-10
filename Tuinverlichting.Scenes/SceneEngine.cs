@@ -19,7 +19,9 @@ public sealed record EngineOptions
     public double LookaheadS { get; init; } = 1.0;
     public double MaxHueSpeed { get; init; } = 6;          // °/s
     public double MaxSaturationSpeed { get; init; } = 10;  // %/s
-    public double MaxBrightnessSpeed { get; init; } = 4;   // %/s
+    /// %/s. Helderheidsstappen bleken in kijktests niet zichtbaar (alleen-helderheidsgolf: 0 markeringen),
+    /// dus ruimer dan tint; nodig voor het opflakkeren van vuur.
+    public double MaxBrightnessSpeed { get; init; } = 8;
     /// Vanaf DimStart loopt de helderheid lineair af tot DimFactor om DimEnd; tot NightEnds blijft hij gedimd.
     public TimeOnly DimStart { get; init; } = new(22, 0);
     public TimeOnly DimEnd { get; init; } = new(23, 0);
@@ -120,8 +122,10 @@ public sealed class SceneEngine
         double bri = Math.Min(target.Brightness * EveningFactor(local), l.Config.MaxBrightness);
         target = target with { Brightness = Math.Max(1, bri) };
 
-        // snelheidsbegrenzer t.o.v. de vorige uitvoer van deze lamp
-        if (l.Last is { } last)
+        // snelheidsbegrenzer t.o.v. de vorige uitvoer van deze lamp — niet voor effecten die bewust springen en
+        // de lampfade het werk laten doen (vuur), zodra de crossfade daarheen klaar is
+        bool lampFades = to is { UsesLampFade: true } && progress >= 1;
+        if (!lampFades && l.Last is { } last)
         {
             double dt = Math.Max(0, t - l.LastT);
             target = Limit(last, target, dt);
@@ -145,19 +149,30 @@ public sealed class SceneEngine
             last.Brightness + Math.Clamp(target.Brightness - last.Brightness, -maxB, maxB));
     }
 
-    /// Draait de engine tot ct geannuleerd wordt. Elke lamp krijgt per Interval één update; de lampen
-    /// zijn gespreid binnen dat interval zodat er nooit alle requests tegelijk de lucht in gaan.
+    /// Bemonsteringsinterval per lamp op tijd t: dat van het effect zelf (bijv. vuur: vaker, want stapsgewijs
+    /// constant) zodra de crossfade erheen klaar is, anders EngineOptions.Interval. Tijdens een crossfade
+    /// verandert de uitvoer continu en zou vaak bemonsteren veel verkeer geven.
+    public TimeSpan IntervalAt(double t)
+    {
+        lock (_lock)
+        {
+            bool faded = _fadeDuration <= 0 || t >= _fadeStart + _fadeDuration;
+            return faded && _to?.PreferredInterval is { } p ? p : Options.Interval;
+        }
+    }
+
+    /// Draait de engine tot ct geannuleerd wordt. Elke lamp krijgt per interval (zie IntervalAt) één beurt; de
+    /// lampen zijn gespreid binnen dat interval zodat er nooit alle requests tegelijk de lucht in gaan.
     /// clock levert t (seconden); localNow levert de lokale tijd voor de avondcurve.
     public async Task RunAsync(Stopwatch clock, Func<TimeOnly> localNow, CancellationToken ct)
     {
         if (_lamps.Length == 0) return;
-        double tickMs = Options.Interval.TotalMilliseconds / _lamps.Length;
-        long start = clock.ElapsedMilliseconds;
+        double due = clock.Elapsed.TotalMilliseconds;
         for (long k = 0; !ct.IsCancellationRequested; k++)
         {
-            long due = start + (long)(k * tickMs);
-            long wait = due - clock.ElapsedMilliseconds;
-            if (wait > 0)
+            due += IntervalAt(clock.Elapsed.TotalSeconds).TotalMilliseconds / _lamps.Length;
+            double wait = due - clock.Elapsed.TotalMilliseconds;
+            if (wait >= 1)
                 try { await Task.Delay((int)wait, ct); } catch (OperationCanceledException) { break; }
 
             int i = (int)(k % _lamps.Length);

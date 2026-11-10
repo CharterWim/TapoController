@@ -161,6 +161,29 @@ of Homebridge (scènes als HomeKit-schakelaars).
   - `TapoProbe scenedemo [deel s=60] [crossfade s=20]`: golf vanuit lantaarn → vuur → golf L01→L13.
     Droge run 3×4 s: 13/13, 0 fouten, alles teruggezet.
   - L01 kwam na de stroomreset terug op standaardstand (bri 100, hue 302, sat 14); handmatig op 338/19/33 gezet.
+  - Vuur iteratie 2 ("meer helderheidsverschil, meer rood↔oranje"): bereik 0–32° / 15–65%, contrast 1,8,
+    begrenzer helderheid 4→8 %/s. Wim: "erg schokkerig en lijkt in een wave te bewegen".
+    Oorzaken: 2D-ruis over (positie, tijd) → patronen schuiven langs de schutting; te snel helderheidslaagje
+    (begrenzer kapt af = knikjes); bij ~9% (met avondcurve) is 1% stap zichtbaar.
+  - Vuur iteratie 3: per lamp eigen 1D-ruis (rij id = pos*10) + 25% gedeelde trage "adem"; tint 7 s, helderheid
+    5 s per ruispunt, contrast 1,5, helderheid 25–65%. Tests: buren r<0,5 bij elke vertraging 0,7–7 s (geen golf),
+    p95 van de snelheid binnen de begrenzer (6°/s, 8%/s). Wim: "sneller, meer willekeurig, lampen lijken allemaal
+    hetzelfde te doen, nog schokkerig, mag wilder".
+  - Vuur iteratie 4 (andere aanpak): elke lamp springt om de 0,7–1,4 × FlickerS (1,2 s, eigen periode en fase per
+    lamp) naar een nieuwe loting (helderheid 70% / tint 50% geloot, rest trage onderstroom per lamp); de ingebouwde
+    ~1 s-fade van de L630 maakt er flakkeringen van (het "optrekken/afremmen" dat bij golven stoorde is hier gewenst).
+    `Effect.UsesLampFade` → engine slaat de snelheidsbegrenzer over na de crossfade. Bereik 0–35° / 20–75%.
+    Wim: "veel beter, maar kleurverschillen mogen groter; laagste helderheid mag naar 5%". 13/13, 0 fouten.
+  - Vuur iteratie 5: tint 0–45°, HueRandomness 0,7, helderheid 5–75%. Wim: "lampen veranderen tegelijk in een
+    patroon van ~2 s". Oorzaak: engine bemonsterde elke lamp maar elke 0,7 s → alle wissels op een gemeenschappelijk
+    raster (aliasing met flakkerperiodes ~1,2 s).
+  - Vuur iteratie 6: vuur is stapsgewijs constant (ook de onderstroom per flakkering bemonsterd), tijdvervorming
+    (0,8·Value2D(t/4), helling ≤0,3) → elke flakkering eigen duur; `Effect.PreferredInterval` (vuur 200 ms) en
+    `SceneEngine.IntervalAt(t)`: na de crossfade bemonstert RunAsync het vuur elke 200 ms per lamp; verkeer blijft
+    ~1 opdracht per flakkering omdat gelijke waarden niet verstuurd worden. 34 tests.
+    **Wim: "mooi"** (2026-11-11) → dit is de huidige vuurversie.
+  - `TapoProbe scene <golf-lantaarn|vuur|golf> [duur s=120]`: één scène los bekijken.
+  - Git: credential.helper = wincred (globaal) → token na volgende push bewaard in Windows Referentiebeheer.
 - Daarna: ASP.NET Core-host met API (POST /api/scenes/{naam}/start, /api/stop) en portal, scènes als JSON,
   lantaarns in scènes (crossfade van/naar warm wit), deploy naar Pi 3.
   Open: echte posities in meters, L535-gedrag, DHCP-reserveringen.

@@ -31,6 +31,16 @@ public enum WaveDirection
 public abstract record Effect
 {
     public abstract Hsv Evaluate(LampPoint lamp, double t);
+
+    /// True = het effect geeft bewust sprongen en laat de ingebouwde fade van de lamp (~1 s, met optrekken en
+    /// afremmen) het vloeiend maken. De engine slaat dan de snelheidsbegrenzer over (na de crossfade).
+    [JsonIgnore]
+    public virtual bool UsesLampFade => false;
+
+    /// Hoe vaak de engine dit effect per lamp wil bemonsteren (null = EngineOptions.Interval).
+    /// Alleen zinvol voor effecten die stapsgewijs constant zijn: gelijke waarden worden niet verstuurd.
+    [JsonIgnore]
+    public virtual TimeSpan? PreferredInterval => null;
 }
 
 /// Vaste kleur.
@@ -71,27 +81,58 @@ public sealed record WaveEffect : Effect
     }
 }
 
-/// Smeulend vuur: trage ruis op tint en helderheid, deels gedeeld tussen buren. Geen snel flikkeren.
+/// Vuur dat flakkert: elke lamp springt om de ~1 s naar een nieuwe, willekeurige helderheid en tint, en de
+/// ingebouwde fade van de L630 (~1 s, optrekken + afremmen) maakt daar vloeiende flakkeringen van.
+/// - Elke lamp heeft een eigen ritme (periode en fase) én elke flakkering een licht wisselende duur
+///   (tijdvervorming), zodat ze nooit gelijk lopen.
+/// - Een trage onderstroom per lamp (Randomness < 1) voorkomt dat het pure ruis wordt.
+/// - De waarde is stapsgewijs constant (ook de onderstroom wordt per flakkering bemonsterd): de engine kan het effect
+///   dan vaak bemonsteren (PreferredInterval) zonder extra verkeer, want gelijke waarden worden niet verstuurd.
+///   Bij 0,7 s bemonstering vielen de wissels van alle lampen op een gezamenlijk raster (zichtbaar ritme van ~2 s).
+/// - Geen ruis over de positie: die gaf patronen die langs de schutting schoven (zag eruit als een golf).
+/// Waarom niet met kleine stapjes zoals de golf: dat maakte het vuur tam, en bij lage helderheid zichtbaar trapjes.
 public sealed record FireEffect : Effect
 {
-    public double HueMin { get; init; } = 8;
-    public double HueMax { get; init; } = 35;
-    public double Saturation { get; init; } = 95;
-    public double BrightnessMin { get; init; } = 25;
-    public double BrightnessMax { get; init; } = 55;
-    /// Seconden tussen twee ruis-roosterpunten in de tijd: groter = trager.
-    public double TimeScaleS { get; init; } = 8;
-    /// Hoeveel ruisroosterpunten per lampplaats: kleiner = buren lijken meer op elkaar.
-    public double SpatialScale { get; init; } = 0.35;
+    public double HueMin { get; init; } = 0;
+    public double HueMax { get; init; } = 45;
+    public double Saturation { get; init; } = 100;
+    /// Laag mag hier wel: elke flakkering is één sprong die de lamp zelf fadet, geen reeks kleine 1%-stapjes.
+    public double BrightnessMin { get; init; } = 5;
+    public double BrightnessMax { get; init; } = 75;
+    /// Gemiddelde tijd tussen twee flakkeringen per lamp (per lamp 0,7–1,4× dit).
+    public double FlickerS { get; init; } = 1.2;
+    /// Deel van de waarde dat per flakkering opnieuw geloot wordt (0 = alleen trage onderstroom, 1 = pure ruis).
+    public double BrightnessRandomness { get; init; } = 0.7;
+    public double HueRandomness { get; init; } = 0.7;
+    /// Seconden per punt van de trage onderstroom.
+    public double SlowTimeScaleS { get; init; } = 6;
     public int Seed { get; init; } = 1;
+
+    [JsonIgnore]
+    public override bool UsesLampFade => true;
+
+    [JsonIgnore]
+    public override TimeSpan? PreferredInterval => TimeSpan.FromMilliseconds(200);
 
     public override Hsv Evaluate(LampPoint lamp, double t)
     {
-        double x = lamp.Pos * SpatialScale;
-        double u = t / TimeScaleS;
-        // twee octaven; helderheid met andere seed en iets sneller, zodat tint en helderheid niet gelijk lopen
-        double nh = 0.7 * Noise.Value2D(x, u, Seed) + 0.3 * Noise.Value2D(2 * x, 2 * u, Seed + 101);
-        double nb = 0.7 * Noise.Value2D(x, u * 1.3, Seed + 7) + 0.3 * Noise.Value2D(2 * x, 2.6 * u, Seed + 211);
+        int id = (int)Math.Round(lamp.Pos * 10) + 1000;
+
+        // eigen ritme: periode en fase per lamp, plus een trage tijdvervorming zodat ook opeenvolgende
+        // flakkeringen van één lamp niet even lang duren. Helling ≤ 0,8 × 1,5 / 4 = 0,3 → duur 0,77–1,43× de periode.
+        double period = FlickerS * (0.7 + 0.7 * Noise.Hash(id, 1, Seed + 31));
+        double phase = period * Noise.Hash(id, 2, Seed + 37);
+        double warp = 0.8 * Noise.Value2D(t / 4, id, Seed + 41);
+        int k = (int)Math.Floor((t + phase + warp) / period);
+
+        // per flakkering een nieuwe loting, plus trage onderstroom per lamp — die ook per flakkering bemonsterd,
+        // zodat de waarde binnen een flakkering constant blijft
+        double rb = Noise.Hash(k, id, Seed + 11), rh = Noise.Hash(k, id, Seed + 13);
+        double tk = k * period;
+        double sb = Noise.Value2D(tk / SlowTimeScaleS, id, Seed + 7), sh = Noise.Value2D(tk / SlowTimeScaleS / 1.5, id, Seed);
+        double nb = BrightnessRandomness * rb + (1 - BrightnessRandomness) * sb;
+        double nh = HueRandomness * rh + (1 - HueRandomness) * sh;
+
         return new Hsv(HueMin + (HueMax - HueMin) * nh, Saturation, BrightnessMin + (BrightnessMax - BrightnessMin) * nb);
     }
 }
@@ -111,7 +152,8 @@ static class Noise
     static double Smooth(double f) => f * f * (3 - 2 * f);
     static double Lerp(double a, double b, double f) => a + (b - a) * f;
 
-    static double Hash(int x, int y, int seed)
+    /// Pseudo-willekeurig 0..1 voor een roosterpunt; zelfde invoer = zelfde uitkomst.
+    public static double Hash(int x, int y, int seed)
     {
         unchecked
         {

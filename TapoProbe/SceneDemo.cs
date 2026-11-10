@@ -6,8 +6,21 @@ using Tuinverlichting.Tapo;
 
 static partial class Fence
 {
-    public static async Task<int> SceneDemoCommand(string password, double partS, double fadeS)
+    /// Beschikbare scènes voor `scene <naam>`.
+    public static readonly (string Key, string Name, Effect Effect)[] Scenes =
+    [
+        ("golf-lantaarn", "Golf vanuit de lantaarn (blauw)", new WaveEffect { Direction = WaveDirection.FromLantern, PeriodS = 30, Wavelength = 20 }),
+        ("vuur", "Smeulend vuur (rood/oranje)", new FireEffect()),
+        ("golf", "Golf L01 -> L13 (blauw, lang verloop)", new WaveEffect { Direction = WaveDirection.Forward, PeriodS = 30, Wavelength = 30 }),
+    ];
+
+    public static async Task<int> SceneDemoCommand(string password, double partS, double fadeS, string? only = null)
     {
+        if (only is not null && !Scenes.Any(s => s.Key == only))
+        {
+            Console.WriteLine($"Onbekende scène '{only}'. Kies uit: {string.Join(", ", Scenes.Select(s => s.Key))}");
+            return 1;
+        }
         var cfg = LoadConfig();
         Console.WriteLine($"{cfg.Lamps.Length} schuttinglampen verbinden ...");
         var lamps = await ConnectAll(cfg.Lamps, password);
@@ -27,12 +40,7 @@ static partial class Fence
             engine.SetInitialState(l.Config.Name, start);
         }
 
-        var scenes = new (string Name, Effect Effect)[]
-        {
-            ("Golf vanuit de lantaarn (blauw)", new WaveEffect { Direction = WaveDirection.FromLantern, PeriodS = 30, Wavelength = 20 }),
-            ("Smeulend vuur (rood/oranje)", new FireEffect()),
-            ("Golf L01 -> L13 (blauw, lang verloop)", new WaveEffect { Direction = WaveDirection.Forward, PeriodS = 30, Wavelength = 30 }),
-        };
+        var scenes = Scenes.Where(s => only is null || s.Key == only).Select(s => (s.Name, s.Effect)).ToArray();
 
         var factor = engine.EveningFactor(TimeOnly.FromDateTime(DateTime.Now));
         Console.WriteLine($"""
