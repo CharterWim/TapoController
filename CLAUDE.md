@@ -220,6 +220,10 @@ of Homebridge (scènes als HomeKit-schakelaars).
   `set_device_info {"default_states":{"type":"custom","re_power_type":"always_on","state":{338/19/33}}}` →
   opgeslagen, en de opgeslagen stand verandert niet meer mee met kleurwissels (Wim: "het is goed").
   `re_power_type: "always_off"` wordt geaccepteerd maar NIET opgeslagen; bekende waarden zijn alleen
-  `always_on` en `last_states` → "uit na stroomonderbreking" lijkt niet te kunnen. Overige 14 lampen nog niet aangepast.
+  `always_on` en `last_states` → "uit na stroomonderbreking" kan niet (bevestigd in de Tapo-app: alleen
+  "Inschakelen" of "In-/uitschakelen"). App-mapping: "Laatste keer 'Aan'" = type last_states,
+  "Aangepaste verlichting" = type custom, "Inschakelen" = re_power_type always_on.
+  **2026-11-11: alle 15 lampen op custom + always_on** (schutting 338/19/33, lantaarns color_temp 6310 / 100%),
+  per lamp teruggelezen. L09 in de app gecontroleerd: "Aangepaste verlichting #FFCFE0 | 33%".
 - Daarna: Siri (iOS Opdrachten), scènes als JSON, portal, deploy naar Pi 3.
-  Open: echte posities in meters, DHCP-reserveringen, inschakelgedrag overige lampen.
+  Open: echte posities in meters, DHCP-reserveringen.
