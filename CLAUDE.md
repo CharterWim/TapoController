@@ -199,6 +199,27 @@ of Homebridge (scènes als HomeKit-schakelaars).
     Droge run 10 s: 13/13, 0 fouten. **Wim: "mooi"** (2026-11-11, 5 s per doorgang).
   - `TapoProbe scene <golf-lantaarn|vuur|golf> [duur s=120]`: één scène los bekijken.
   - Git: credential.helper = wincred (globaal) → token na volgende push bewaard in Windows Referentiebeheer.
-- Daarna: ASP.NET Core-host met API (POST /api/scenes/{naam}/start, /api/stop) en portal, scènes als JSON,
-  lantaarns in scènes (crossfade van/naar warm wit), deploy naar Pi 3.
-  Open: echte posities in meters, L535-gedrag, DHCP-reserveringen.
+- Stap 5 (klaar, lokaal getest): **Tuinverlichting.Host** (ASP.NET Core minimal API, poort 5080, 0.0.0.0)
+  - `GET /api/status`, `GET /api/scenes`, `POST /api/scenes/{key}/start?fade=20`, `POST /api/stop?fade=10`,
+    `GET /health`. Optioneel `Api:Key` → header `X-Api-Key` vereist (constant-time vergelijking).
+  - `LightController`: alle 15 lampen bij opstart verbinden (3 pogingen) en basisstand onthouden (kleur of
+    kleurtemperatuur); start vanuit rust = engine.Reset(basis) + crossfade; wisselen = crossfade vanaf vorige
+    scène; lantaarns alleen aangestuurd in scènes met UsesLanterns, bij wissel naar andere scène direct terug
+    naar hun witte basisstand; stop = crossfade naar `PerLampStaticEffect(basis)`, daarna exact terugzetten
+    (incl. color_temp); dienst stopt → direct terugzetten. Commando's geserialiseerd (SemaphoreSlim).
+  - `SceneCatalog` (Scenes-library) = gedeelde scènelijst voor host en TapoProbe; `SceneEngine` kreeg
+    Reset, SetActive/IsActive (nieuw geactiveerde lamp fadet vanaf eigen startkleur), RunAsync slaat inactieve
+    lampen over.
+  - Wachtwoord: zelfde UserSecretsId "tuinverlichting-tapo" (ook buiten Development geladen); Pi: Tapo__Password.
+  - Lokale test (localhost:5080): 15/15 verbonden, lantaarnnacht → vuur (lantaarns terug naar wit) → stop;
+    alle lampen exact op basisstand. 46 tests.
+  - Let op: basisstand = stand bij het opstarten van de host. Start je de host terwijl er nog een scène-kleur
+    op de lampen staat, dan wordt dát de basis.
+- Inschakelgedrag (flash wear): lampen stonden op `default_states.type = "last_states"` (laatste stand
+  onthouden → mogelijk flash-schrijfactie per wijziging). L09 omgezet naar
+  `set_device_info {"default_states":{"type":"custom","re_power_type":"always_on","state":{338/19/33}}}` →
+  opgeslagen, en de opgeslagen stand verandert niet meer mee met kleurwissels (Wim: "het is goed").
+  `re_power_type: "always_off"` wordt geaccepteerd maar NIET opgeslagen; bekende waarden zijn alleen
+  `always_on` en `last_states` → "uit na stroomonderbreking" lijkt niet te kunnen. Overige 14 lampen nog niet aangepast.
+- Daarna: Siri (iOS Opdrachten), scènes als JSON, portal, deploy naar Pi 3.
+  Open: echte posities in meters, DHCP-reserveringen, inschakelgedrag overige lampen.

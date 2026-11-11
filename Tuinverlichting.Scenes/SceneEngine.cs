@@ -41,6 +41,10 @@ public sealed class SceneEngine
         public Hsv? Last;
         public double LastT;
         public Hsv? Initial;
+        /// Stuurt de engine deze lamp aan? (bijv. lantaarns alleen in scènes die ze een rol geven)
+        public volatile bool Active = true;
+        /// Net geactiveerd: crossfade vanaf Initial i.p.v. vanaf het vorige effect.
+        public volatile bool FadeFromInitial;
     }
 
     readonly LampState[] _lamps;
@@ -81,8 +85,41 @@ public sealed class SceneEngine
             _to = effect;
             _fadeStart = now;
             _fadeDuration = Math.Max(0, crossfade.TotalSeconds);
+            foreach (var l in _lamps) l.FadeFromInitial = false;
         }
     }
+
+    /// Alles terug naar af: geen effect, en per lamp een nieuwe begintoestand (de huidige kleur van de lamp).
+    /// Het volgende SetEffect fadet vanuit die begintoestand.
+    public void Reset(IReadOnlyDictionary<string, Hsv> startColors)
+    {
+        lock (_lock)
+        {
+            _from = _to = null;
+            _fadeDuration = 0;
+            foreach (var l in _lamps)
+            {
+                if (startColors.TryGetValue(l.Config.Name, out var c)) { l.Initial = c; l.Last = c; }
+                l.FadeFromInitial = false;
+            }
+        }
+    }
+
+    /// Lamp wel of niet aansturen. Bij activeren (ná SetEffect aanroepen): crossfade vanaf startColor
+    /// i.p.v. vanaf het vorige effect, omdat de lamp daar niet aan meedeed.
+    public void SetActive(string lampName, bool active, Hsv? startColor = null)
+    {
+        var l = _lamps.First(l => l.Config.Name == lampName);
+        if (active && !l.Active && startColor is { } c)
+        {
+            l.Initial = c;
+            l.Last = c;
+            l.FadeFromInitial = true;
+        }
+        l.Active = active;
+    }
+
+    public bool IsActive(string lampName) => _lamps.First(l => l.Config.Name == lampName).Active;
 
     /// Avondcurve: helderheidsfactor voor een lokale tijd.
     public double EveningFactor(TimeOnly local)
@@ -114,7 +151,7 @@ public sealed class SceneEngine
         else
         {
             var b = to.Evaluate(l.Point, Te(to));
-            var a = from is null ? l.Initial ?? b : from.Evaluate(l.Point, Te(from));
+            var a = from is null || l.FadeFromInitial ? l.Initial ?? b : from.Evaluate(l.Point, Te(from));
             double s = progress * progress * (3 - 2 * progress);   // smoothstep
             target = Hsv.Lerp(a, b, s);
         }
@@ -177,6 +214,7 @@ public sealed class SceneEngine
                 try { await Task.Delay((int)wait, ct); } catch (OperationCanceledException) { break; }
 
             int i = (int)(k % _lamps.Length);
+            if (!_lamps[i].Active) continue;
             var color = ComputeStep(i, clock.Elapsed.TotalSeconds, localNow());
             _lamps[i].Output.Submit(color);
         }

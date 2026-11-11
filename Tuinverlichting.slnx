@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="TapoProbe/TapoProbe.csproj" />
+  <Project Path="Tuinverlichting.Host/Tuinverlichting.Host.csproj" />
   <Project Path="Tuinverlichting.Scenes/Tuinverlichting.Scenes.csproj" />
   <Project Path="Tuinverlichting.Tapo.Tests/Tuinverlichting.Tapo.Tests.csproj" />
   <Project Path="Tuinverlichting.Tapo/Tuinverlichting.Tapo.csproj" />

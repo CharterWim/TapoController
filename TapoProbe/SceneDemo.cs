@@ -6,31 +6,22 @@ using Tuinverlichting.Tapo;
 
 static partial class Fence
 {
-    /// Beschikbare scènes voor `scene <naam>`.
-    public static readonly (string Key, string Name, Effect Effect)[] Scenes =
-    [
-        ("golf-lantaarn", "Golf vanuit de lantaarn (blauw)", new WaveEffect { Direction = WaveDirection.FromLantern, PeriodS = 30, Wavelength = 20 }),
-        ("vuur", "Smeulend vuur (rood/oranje)", new FireEffect()),
-        ("golf", "Golf L01 -> L13 (blauw, lang verloop)", new WaveEffect { Direction = WaveDirection.Forward, PeriodS = 30, Wavelength = 30 }),
-        ("lantaarnnacht", "Lantaarnnacht (maanlicht + ademende lantaarn, met lantaarns)", new LanternNightEffect()),
-        ("looplicht", "Looplicht (rode kop heen en weer, 5 s per doorgang)", new ScannerEffect()),
-    ];
-
-    /// Lantaarns doen alleen mee als een gekozen scène ze een eigen rol geeft; anders blijven ze op hun basisstand.
-    static bool UsesLanterns(Effect e) => e is LanternNightEffect;
+    /// Scènes die `scenedemo` zonder naam achter elkaar laat zien.
+    static readonly string[] DemoKeys = ["golf-lantaarn", "vuur", "golf"];
 
     public static async Task<int> SceneDemoCommand(string password, double partS, double fadeS, string? only = null,
         Effect? custom = null)
     {
-        if (only is not null && !Scenes.Any(s => s.Key == only))
+        if (only is not null && SceneCatalog.Find(only) is null)
         {
-            Console.WriteLine($"Onbekende scène '{only}'. Kies uit: {string.Join(", ", Scenes.Select(s => s.Key))}");
+            Console.WriteLine($"Onbekende scène '{only}'. Kies uit: {string.Join(", ", SceneCatalog.All.Select(s => s.Key))}");
             return 1;
         }
         var cfg = LoadConfig();
-        var scenes = Scenes.Where(s => only is null ? !UsesLanterns(s.Effect) : s.Key == only)
-            .Select(s => (s.Name, Effect: custom ?? s.Effect)).ToArray();
-        var configs = scenes.Any(s => UsesLanterns(s.Effect)) ? cfg.Lamps.Concat(cfg.Lanterns).ToArray() : cfg.Lamps;
+        var defs = only is null ? DemoKeys.Select(k => SceneCatalog.Find(k)!).ToArray() : [SceneCatalog.Find(only)!];
+        var scenes = defs.Select(s => (s.Name, Effect: custom ?? s.Effect)).ToArray();
+        // Lantaarns doen alleen mee als een gekozen scène ze een eigen rol geeft; anders blijven ze op hun basisstand.
+        var configs = defs.Any(s => s.UsesLanterns) ? cfg.Lamps.Concat(cfg.Lanterns).ToArray() : cfg.Lamps;
         Console.WriteLine($"{configs.Length} lampen verbinden ...");
         var lamps = await ConnectAll(configs, password);
         if (lamps.Count == 0) return 1;

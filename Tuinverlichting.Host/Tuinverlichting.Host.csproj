@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Zelfde user secrets als TapoProbe: Tapo:Password hoeft maar één keer gezet te worden. -->
+    <UserSecretsId>tuinverlichting-tapo</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tuinverlichting.Scenes\Tuinverlichting.Scenes.csproj" />
+  </ItemGroup>
+
+</Project>

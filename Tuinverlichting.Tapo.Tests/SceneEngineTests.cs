@@ -371,6 +371,53 @@ public class SceneEngineTests
     }
 
     [Fact]
+    public void Reset_makes_next_effect_fade_from_given_start_colors()
+    {
+        var e = Engine(NoLimits);
+        e.SetEffect(new StaticEffect(100, 100, 50), TimeSpan.Zero, now: 0);
+        e.ComputeFrame(1, Afternoon);
+        e.Reset(new Dictionary<string, Hsv> { ["A"] = new(10, 10, 10), ["B"] = new(20, 20, 20), ["C"] = new(30, 30, 30) });
+        e.SetEffect(new StaticEffect(200, 50, 50), TimeSpan.FromSeconds(10), now: 5);
+        Assert.True(new Hsv(10, 10, 10).SameOnLamp(e.ComputeStep(0, 5, Afternoon)));    // niet vanaf het oude effect
+        Assert.True(new Hsv(200, 50, 50).SameOnLamp(e.ComputeStep(0, 15, Afternoon)));
+    }
+
+    [Fact]
+    public void Newly_activated_lamp_fades_from_its_start_color_not_from_previous_effect()
+    {
+        var e = Engine(NoLimits);
+        e.SetEffect(new StaticEffect(100, 100, 50), TimeSpan.Zero, now: 0);
+        e.SetActive("C", false);
+        Assert.False(e.IsActive("C"));
+
+        e.SetEffect(new StaticEffect(200, 100, 50), TimeSpan.FromSeconds(10), now: 10);
+        e.SetActive("C", true, new Hsv(30, 35, 80));
+        Assert.True(e.IsActive("C"));
+
+        Assert.Equal(30, e.ComputeStep(2, 10, Afternoon).H);    // lantaarn begint bij zijn eigen (witte) stand
+        Assert.Equal(100, e.ComputeStep(0, 10, Afternoon).H);   // de rest crossfadet vanaf het vorige effect
+        Assert.Equal(200, e.ComputeStep(2, 20, Afternoon).H);
+    }
+
+    [Fact]
+    public void Catalog_has_unique_keys_and_lantern_scenes_are_marked()
+    {
+        var keys = SceneCatalog.All.Select(s => s.Key).ToList();
+        Assert.Equal(keys.Count, keys.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.All(SceneCatalog.All, s => Assert.Equal(s.Effect is LanternNightEffect, s.UsesLanterns));
+        Assert.NotNull(SceneCatalog.Find("VUUR"));
+        Assert.Null(SceneCatalog.Find("bestaat-niet"));
+    }
+
+    [Fact]
+    public void PerLampStatic_returns_each_lamps_own_color()
+    {
+        var eff = new PerLampStaticEffect(new Dictionary<string, Hsv> { ["A"] = new(1, 2, 3) }, new Hsv(9, 9, 9));
+        Assert.Equal(new Hsv(1, 2, 3), eff.Evaluate(new LampPoint("A", 0, 0), 5));
+        Assert.Equal(new Hsv(9, 9, 9), eff.Evaluate(new LampPoint("B", 0, 0), 5));
+    }
+
+    [Fact]
     public void Effects_round_trip_as_json()
     {
         Effect[] effects =
