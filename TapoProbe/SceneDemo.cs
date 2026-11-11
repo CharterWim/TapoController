@@ -12,7 +12,11 @@ static partial class Fence
         ("golf-lantaarn", "Golf vanuit de lantaarn (blauw)", new WaveEffect { Direction = WaveDirection.FromLantern, PeriodS = 30, Wavelength = 20 }),
         ("vuur", "Smeulend vuur (rood/oranje)", new FireEffect()),
         ("golf", "Golf L01 -> L13 (blauw, lang verloop)", new WaveEffect { Direction = WaveDirection.Forward, PeriodS = 30, Wavelength = 30 }),
+        ("lantaarnnacht", "Lantaarnnacht (maanlicht + ademende lantaarn, met lantaarns)", new LanternNightEffect()),
     ];
+
+    /// Lantaarns doen alleen mee als een gekozen scène ze een eigen rol geeft; anders blijven ze op hun basisstand.
+    static bool UsesLanterns(Effect e) => e is LanternNightEffect;
 
     public static async Task<int> SceneDemoCommand(string password, double partS, double fadeS, string? only = null)
     {
@@ -22,8 +26,11 @@ static partial class Fence
             return 1;
         }
         var cfg = LoadConfig();
-        Console.WriteLine($"{cfg.Lamps.Length} schuttinglampen verbinden ...");
-        var lamps = await ConnectAll(cfg.Lamps, password);
+        var scenes = Scenes.Where(s => only is null ? !UsesLanterns(s.Effect) : s.Key == only)
+            .Select(s => (s.Name, s.Effect)).ToArray();
+        var configs = scenes.Any(s => UsesLanterns(s.Effect)) ? cfg.Lamps.Concat(cfg.Lanterns).ToArray() : cfg.Lamps;
+        Console.WriteLine($"{configs.Length} lampen verbinden ...");
+        var lamps = await ConnectAll(configs, password);
         if (lamps.Count == 0) return 1;
         foreach (var l in lamps)
             l.Lamp.Error += (lamp, e) => Console.WriteLine(
@@ -40,12 +47,10 @@ static partial class Fence
             engine.SetInitialState(l.Config.Name, start);
         }
 
-        var scenes = Scenes.Where(s => only is null || s.Key == only).Select(s => (s.Name, s.Effect)).ToArray();
-
         var factor = engine.EveningFactor(TimeOnly.FromDateTime(DateTime.Now));
         Console.WriteLine($"""
 
-            SCENEDEMO  {lamps.Count} van {cfg.Lamps.Length} lampen, lantaarnpaal op positie {cfg.LanternPos}
+            SCENEDEMO  {lamps.Count} van {configs.Length} lampen, lantaarnpaal op positie {cfg.LanternPos}
             Elke scène {partS} s, crossfade {fadeS} s. Totaal ~{scenes.Length * partS + fadeS:0} s.
             {string.Join("\n", scenes.Select((s, i) => $"  {i + 1}. {s.Name}"))}
 
@@ -95,7 +100,7 @@ static partial class Fence
             Console.WriteLine($"  {l.Config.Name,-9} {l.Lamp.Stats}");
             await l.Lamp.DisposeAsync();
         }
-        var missing = cfg.Lamps.Select(c => c.Name).Except(lamps.Select(l => l.Config.Name)).ToList();
+        var missing = configs.Select(c => c.Name).Except(lamps.Select(l => l.Config.Name)).ToList();
         if (missing.Count > 0) Console.WriteLine($"Niet verbonden (deden niet mee): {string.Join(", ", missing)}");
         Console.WriteLine(failed.Count == 0
             ? $"Alle {lamps.Count} deelnemende lampen teruggezet naar hun oude stand."

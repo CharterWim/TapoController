@@ -53,7 +53,8 @@ public sealed class SceneEngine
     public SceneEngine(IEnumerable<(LampConfig Config, ILightOutput Output)> lamps, double lanternPos, EngineOptions? options = null)
     {
         _lamps = lamps.OrderBy(l => l.Config.Pos)
-            .Select(l => new LampState(l.Config, l.Output, new LampPoint(l.Config.Name, l.Config.Pos, lanternPos)))
+            .Select(l => new LampState(l.Config, l.Output,
+                new LampPoint(l.Config.Name, l.Config.Pos, lanternPos, IsLantern: l.Config.Zone == "lantaarn")))
             .ToArray();
         Options = options ?? new EngineOptions();
     }

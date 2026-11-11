@@ -182,6 +182,15 @@ of Homebridge (scènes als HomeKit-schakelaars).
     `SceneEngine.IntervalAt(t)`: na de crossfade bemonstert RunAsync het vuur elke 200 ms per lamp; verkeer blijft
     ~1 opdracht per flakkering omdat gelijke waarden niet verstuurd worden. 34 tests.
     **Wim: "mooi"** (2026-11-11) → dit is de huidige vuurversie.
+  - Scène **Lantaarnnacht** (`LanternNightEffect`, JSON "lantaarnnacht", eigen ontwerp op verzoek van Wim):
+    schutting traag blauw-violet maanlicht (hue 220–262, sat 65, bri 18–38, periode 45 s, golflengte 26, vanuit de
+    lantaarn); lantaarns amber kaarsgloed (hue 30±6, sat 85, bri 50–75, ademt per lantaarn eigen ritme, BreathS 7);
+    gloed op de schutting rond de paal (HaloStrength 0,75, radius 2,2 plaatsen, gaussisch) via kortste hue-weg
+    blauw→violet→roze→amber. LampPoint kreeg IsLantern (zone "lantaarn") en Id (hash op naam, want beide
+    lantaarns staan op pos 9,5). Lantaarns doen alleen mee in scènes die ze een rol geven (scenedemo zonder).
+    Eerste keer L535 in kleur aangestuurd: werkt (hue/sat/brightness, color_temp 0); terugzetten naar
+    color_temp 6310 werkt (lamp meldt daarna nog de oude hue/sat, maar staat in witmodus). 38 tests.
+    Droge run 8 s: 15/15, 0 fouten. **Wim: "mooi"** (2026-11-11).
   - `TapoProbe scene <golf-lantaarn|vuur|golf> [duur s=120]`: één scène los bekijken.
   - Git: credential.helper = wincred (globaal) → token na volgende push bewaard in Windows Referentiebeheer.
 - Daarna: ASP.NET Core-host met API (POST /api/scenes/{naam}/start, /api/stop) en portal, scènes als JSON,

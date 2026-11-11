@@ -79,7 +79,7 @@ switch (command)
                 args.Length > 2 ? double.Parse(args[2]) : 20)
             : 1;
     case "scene" when args.Length > 1:
-        // scene <golf-lantaarn|vuur|golf> [duur s=120]  -- één scène, fadet in vanuit de huidige kleur (10 s)
+        // scene <golf-lantaarn|vuur|golf|lantaarnnacht> [duur s=120]  -- één scène, fadet in vanuit de huidige kleur (10 s)
         return Password() is { } pw4
             ? await Fence.SceneDemoCommand(pw4, args.Length > 2 ? double.Parse(args[2]) : 120, 10, args[1].ToLowerInvariant())
             : 1;
@@ -89,7 +89,7 @@ switch (command)
                           "         | raw <ip> <method> [json] [wait ms] ...\n" +
                           "         | wavemark <ip> [periode] [interval] [duur] [beide|tint|hel] | fadetest <ip> [duur]\n" +
                           "         | connectall | fencewave [periode s=10] [duur s=90] [interval ms=700] [tint min=190] [tint max=240] [golflengte=10]\n" +
-                          "         | scenedemo [deel s=60] [crossfade s=20] | scene <golf-lantaarn|vuur|golf> [duur s=120]");
+                          "         | scenedemo [deel s=60] [crossfade s=20] | scene <golf-lantaarn|vuur|golf|lantaarnnacht> [duur s=120]");
         return 1;
 }
 

@@ -9,8 +9,24 @@ using Tuinverlichting.Tapo;
 
 namespace Tuinverlichting.Scenes;
 
-/// Waar een lamp staat, zoals een effect hem ziet.
-public readonly record struct LampPoint(string Name, double Pos, double LanternPos);
+/// Waar een lamp staat, zoals een effect hem ziet. IsLantern = een van de lampen in de lantaarnpaal.
+public readonly record struct LampPoint(string Name, double Pos, double LanternPos, bool IsLantern = false)
+{
+    /// Stabiel getal per lamp (op naam), voor effecten die per lamp eigen willekeur willen.
+    /// Niet op positie: beide lantaarns staan op dezelfde positie.
+    public int Id
+    {
+        get
+        {
+            unchecked
+            {
+                int h = 17;
+                foreach (char c in Name) h = h * 31 + c;
+                return h & 0x7FFFFFFF;
+            }
+        }
+    }
+}
 
 public enum WaveDirection
 {
@@ -28,6 +44,7 @@ public enum WaveDirection
 [JsonDerivedType(typeof(WaveEffect), "golf")]
 [JsonDerivedType(typeof(FireEffect), "vuur")]
 [JsonDerivedType(typeof(StaticEffect), "vast")]
+[JsonDerivedType(typeof(LanternNightEffect), "lantaarnnacht")]
 public abstract record Effect
 {
     public abstract Hsv Evaluate(LampPoint lamp, double t);
@@ -134,6 +151,73 @@ public sealed record FireEffect : Effect
         double nh = HueRandomness * rh + (1 - HueRandomness) * sh;
 
         return new Hsv(HueMin + (HueMax - HueMin) * nh, Saturation, BrightnessMin + (BrightnessMax - BrightnessMin) * nb);
+    }
+}
+
+/// "Lantaarnnacht": maanverlichte schutting met een warm ademende lantaarn in het midden.
+/// - Schutting: traag blauw-violet verloop dat vanuit de lantaarnpaal naar buiten loopt.
+/// - Lantaarns: amberkleurige kaarsgloed die zacht ademt, elke lantaarn in een eigen ritme.
+/// - Gloed: de schuttinglampen naast de lantaarnpaal krijgen een deel van de amber mee en ademen mee;
+///   via de kortste hue-weg (blauw → violet → roze → amber) geeft dat een avondhemel-achtig verloop.
+/// Alles blijft ruim binnen de snelheidsbegrenzer (vloeiend op de L630).
+public sealed record LanternNightEffect : Effect
+{
+    // maanlicht op de schutting
+    public double MoonHueMin { get; init; } = 220;
+    public double MoonHueMax { get; init; } = 262;
+    public double MoonSaturation { get; init; } = 65;
+    public double MoonBrightnessMin { get; init; } = 18;
+    public double MoonBrightnessMax { get; init; } = 38;
+    public double MoonPeriodS { get; init; } = 45;
+    public double MoonWavelength { get; init; } = 26;
+
+    // kaarsgloed in de lantaarn
+    public double GlowHue { get; init; } = 30;
+    public double GlowHueSpread { get; init; } = 6;
+    public double GlowSaturation { get; init; } = 85;
+    public double GlowBrightnessMin { get; init; } = 50;
+    public double GlowBrightnessMax { get; init; } = 75;
+    /// Seconden per ademhaling-ruispunt: groter = rustiger.
+    public double BreathS { get; init; } = 7;
+
+    // gloed van de lantaarn op de schutting
+    /// Hoeveel van de lantaarnkleur de schuttinglamp het dichtst bij de paal krijgt (0..1).
+    public double HaloStrength { get; init; } = 0.75;
+    /// Afstand (lampplaatsen) waarop de gloed tot ~37% is afgenomen.
+    public double HaloRadius { get; init; } = 2.2;
+    public int Seed { get; init; } = 1;
+
+    public override Hsv Evaluate(LampPoint lamp, double t)
+    {
+        if (lamp.IsLantern) return Glow(lamp.Id, t);
+
+        var moon = new WaveEffect
+        {
+            HueMin = MoonHueMin, HueMax = MoonHueMax, Saturation = MoonSaturation,
+            BrightnessMin = MoonBrightnessMin, BrightnessMax = MoonBrightnessMax,
+            PeriodS = MoonPeriodS, Wavelength = MoonWavelength, Direction = WaveDirection.FromLantern,
+        }.Evaluate(lamp, t);
+
+        double d = Math.Abs(lamp.Pos - lamp.LanternPos);
+        double w = HaloStrength * Math.Exp(-(d / HaloRadius) * (d / HaloRadius));
+        if (w < 0.005) return moon;
+
+        // gloed op de schutting: gemiddelde ademhaling van de paal (vaste id), iets minder fel
+        var glow = Glow(0, t);
+        var halo = new Hsv(glow.Hue, glow.Saturation - 5, glow.Brightness * 0.8);
+        return Hsv.Lerp(moon, halo, w);
+    }
+
+    Hsv Glow(int id, double t)
+    {
+        int row = id % 100_000;
+        double u = t / BreathS;
+        double nb = 0.75 * Noise.Value2D(u, row, Seed + 3) + 0.25 * Noise.Value2D(2 * u, row, Seed + 5);
+        double nh = Noise.Value2D(u / 1.3, row, Seed + 9);
+        return new Hsv(
+            GlowHue + GlowHueSpread * (2 * nh - 1),
+            GlowSaturation,
+            GlowBrightnessMin + (GlowBrightnessMax - GlowBrightnessMin) * nb);
     }
 }
 

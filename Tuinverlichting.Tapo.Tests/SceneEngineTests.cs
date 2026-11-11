@@ -239,6 +239,77 @@ public class SceneEngineTests
         Assert.Equal(1, e.ComputeStep(0, 1, Afternoon).H);   // 355 + 6 = 361 -> 1
     }
 
+    static double HueDistance(double a, double b) => Math.Abs(((a - b) % 360 + 540) % 360 - 180);
+
+    [Fact]
+    public void LanternNight_lanterns_glow_warm_and_breathe_independently()
+    {
+        var e = new LanternNightEffect();
+        var l1 = new LampPoint("Lantern_01", 9.5, 9.5, IsLantern: true);
+        var l2 = new LampPoint("Lantern_02", 9.5, 9.5, IsLantern: true);
+        var b1 = new List<double>();
+        var b2 = new List<double>();
+        for (double t = 0; t < 600; t += 0.7)
+        {
+            var a = e.Evaluate(l1, t);
+            Assert.InRange(a.Hue, e.GlowHue - e.GlowHueSpread, e.GlowHue + e.GlowHueSpread);
+            Assert.InRange(a.Brightness, e.GlowBrightnessMin, e.GlowBrightnessMax);
+            b1.Add(a.Brightness);
+            b2.Add(e.Evaluate(l2, t).Brightness);
+        }
+        Assert.True(Correlation([.. b1], [.. b2]) < 0.6, $"lantaarns ademen te gelijk: r={Correlation([.. b1], [.. b2]):0.00}");
+    }
+
+    [Fact]
+    public void LanternNight_fence_is_blue_far_away_and_warmer_near_the_lantern()
+    {
+        var e = new LanternNightEffect();
+        for (double t = 0; t < 300; t += 3.1)
+        {
+            var far = e.Evaluate(new LampPoint("Tuin_L01", 0, 9.5), t);
+            var near = e.Evaluate(new LampPoint("Tuin_L09", 8, 9.5), t);
+            var nearOther = e.Evaluate(new LampPoint("Tuin_L10", 11, 9.5), t);
+            Assert.InRange(far.Hue, e.MoonHueMin, e.MoonHueMax);
+            // dichtbij de paal dichter bij amber dan ver weg
+            Assert.True(HueDistance(near.Hue, e.GlowHue) < HueDistance(far.Hue, e.GlowHue) - 20,
+                $"t={t}: L09 {near.Hue:0} niet warmer dan L01 {far.Hue:0}");
+            // gloed symmetrisch: L09 en L10 staan even ver van de paal
+            Assert.Equal(near.Hue, nearOther.Hue, 6);
+            Assert.Equal(near.Brightness, nearOther.Brightness, 6);
+        }
+    }
+
+    [Fact]
+    public void LanternNight_stays_within_the_rate_limiter()
+    {
+        var e = new LanternNightEffect();
+        var opts = new EngineOptions();
+        var points = Enumerable.Range(0, 15).Select(i => new LampPoint($"L{i}", i, 9.5))
+            .Append(new LampPoint("Lantern_01", 9.5, 9.5, IsLantern: true)).ToArray();
+        foreach (var p in points)
+            for (double t = 0; t < 600; t += 0.7)
+            {
+                var a = e.Evaluate(p, t);
+                var b = e.Evaluate(p, t + 0.7);
+                Assert.True(HueDistance(a.Hue, b.Hue) / 0.7 <= opts.MaxHueSpeed, $"{p.Name} t={t}: tint {a.Hue:0.0}->{b.Hue:0.0}");
+                Assert.True(Math.Abs(a.Brightness - b.Brightness) / 0.7 <= opts.MaxBrightnessSpeed, $"{p.Name} t={t}: helderheid");
+            }
+    }
+
+    [Fact]
+    public void Engine_marks_lantern_zone_as_lantern()
+    {
+        var outputs = new[] { new FakeOutput("Tuin_L09"), new FakeOutput("Lantern_01") };
+        var engine = new SceneEngine(
+        [
+            (new LampConfig("Tuin_L09", "0.0.0.0", "oost", 8), outputs[0]),
+            (new LampConfig("Lantern_01", "0.0.0.0", "lantaarn", 9.5), outputs[1]),
+        ], lanternPos: 9.5, NoLimits);
+        engine.SetEffect(new LanternNightEffect(), TimeSpan.Zero, now: 0);
+        var frame = engine.ComputeFrame(10, Afternoon);
+        Assert.InRange(frame.Single(f => f.Name == "Lantern_01").Color.Hue, 24, 36);
+    }
+
     [Fact]
     public void Effects_round_trip_as_json()
     {
@@ -247,6 +318,7 @@ public class SceneEngineTests
             new WaveEffect { PeriodS = 40, Direction = WaveDirection.FromLantern },
             new FireEffect { Seed = 3 },
             new StaticEffect(30, 20, 40),
+            new LanternNightEffect { HaloStrength = 0.5 },
         ];
         var json = JsonSerializer.Serialize(effects);
         Assert.Contains("\"type\":\"golf\"", json);
