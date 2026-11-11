@@ -310,6 +310,66 @@ public class SceneEngineTests
         Assert.InRange(frame.Single(f => f.Name == "Lantern_01").Color.Hue, 24, 36);
     }
 
+    static readonly double[] FencePositions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14];
+
+    [Fact]
+    public void Scanner_head_ping_pongs_between_the_ends()
+    {
+        var s = new ScannerEffect();
+        Assert.Equal(0, s.HeadAt(0), 6);                 // start links
+        Assert.Equal(12, s.HeadAt(s.SweepS), 6);         // na één doorgang rechts (gat dichtgeschoven: 14 -> 12)
+        Assert.Equal(0, s.HeadAt(2 * s.SweepS), 6);      // en weer terug
+        Assert.Equal(6, s.HeadAt(s.SweepS / 2), 6);      // halverwege in het midden
+        // traag bij de uiteinden, snel in het midden
+        Assert.True(s.HeadAt(0.5) - s.HeadAt(0) < s.HeadAt(2.75) - s.HeadAt(2.25));
+    }
+
+    [Fact]
+    public void Scanner_always_lights_one_or_two_fence_lamps_and_crosses_the_gate_without_gap()
+    {
+        var s = new ScannerEffect();
+        for (double t = 0; t < 20; t += 0.05)
+        {
+            var on = FencePositions.Where(p => s.Evaluate(new LampPoint("L", p, 9.5), t).B == s.BrightnessMax).ToList();
+            Assert.InRange(on.Count, 1, 2);
+            if (on.Count == 2) Assert.True(on.Contains(8) && on.Contains(11) || Math.Abs(on[1] - on[0]) == 1,
+                $"t={t}: niet-aangrenzende lampen aan: {string.Join(",", on)}");
+        }
+        var lantern = s.Evaluate(new LampPoint("Lantern_01", 9.5, 9.5, IsLantern: true), s.SweepS * 8 / 12);
+        Assert.Equal(1, lantern.B);
+    }
+
+    [Fact]
+    public void Scanner_sends_about_two_commands_per_lamp_per_pass()
+    {
+        // aan/uit-wissels per lamp per doorgang tellen (bemonsterd zoals de engine: elke 100 ms)
+        var s = new ScannerEffect();
+        int changes = 0;
+        foreach (var p in FencePositions)
+        {
+            Hsv? prev = null;
+            for (double t = 0; t < 10 * s.SweepS; t += 0.1)
+            {
+                var c = s.Evaluate(new LampPoint("L", p, 9.5), t);
+                if (prev is { } q && !q.SameOnLamp(c)) changes++;
+                prev = c;
+            }
+        }
+        double perLampPerPass = changes / (double)FencePositions.Length / 10;
+        Assert.InRange(perLampPerPass, 1.0, 2.5);
+    }
+
+    [Fact]
+    public void Engine_evaluates_without_lookahead_when_effect_asks()
+    {
+        var e = Engine(new EngineOptions { LookaheadS = 1, MaxHueSpeed = 1e9, MaxSaturationSpeed = 1e9, MaxBrightnessSpeed = 1e9 },
+            ("A", 0, 100));
+        var scanner = new ScannerEffect();
+        e.SetEffect(scanner, TimeSpan.Zero, now: 0);
+        for (double t = 0; t < 10; t += 0.3)
+            Assert.Equal(scanner.Evaluate(new LampPoint("A", 0, 1), t).B, e.ComputeStep(0, t, Afternoon).B);
+    }
+
     [Fact]
     public void Effects_round_trip_as_json()
     {
@@ -319,6 +379,7 @@ public class SceneEngineTests
             new FireEffect { Seed = 3 },
             new StaticEffect(30, 20, 40),
             new LanternNightEffect { HaloStrength = 0.5 },
+            new ScannerEffect { SweepS = 4, Hue = 240 },
         ];
         var json = JsonSerializer.Serialize(effects);
         Assert.Contains("\"type\":\"golf\"", json);

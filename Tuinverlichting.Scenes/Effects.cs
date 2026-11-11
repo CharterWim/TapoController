@@ -45,6 +45,7 @@ public enum WaveDirection
 [JsonDerivedType(typeof(FireEffect), "vuur")]
 [JsonDerivedType(typeof(StaticEffect), "vast")]
 [JsonDerivedType(typeof(LanternNightEffect), "lantaarnnacht")]
+[JsonDerivedType(typeof(ScannerEffect), "looplicht")]
 public abstract record Effect
 {
     public abstract Hsv Evaluate(LampPoint lamp, double t);
@@ -58,6 +59,11 @@ public abstract record Effect
     /// Alleen zinvol voor effecten die stapsgewijs constant zijn: gelijke waarden worden niet verstuurd.
     [JsonIgnore]
     public virtual TimeSpan? PreferredInterval => null;
+
+    /// True (standaard) = de engine evalueert op t + Lookahead, zodat de lamp ná zijn eigen ~1 s fade op de juiste
+    /// waarde uitkomt. False = op t zelf; dan ijlt de lamp ~1 s na (gewenst voor een looplicht: staart achter de kop).
+    [JsonIgnore]
+    public virtual bool UsesLookahead => true;
 }
 
 /// Vaste kleur.
@@ -218,6 +224,53 @@ public sealed record LanternNightEffect : Effect
             GlowHue + GlowHueSpread * (2 * nh - 1),
             GlowSaturation,
             GlowBrightnessMin + (GlowBrightnessMax - GlowBrightnessMin) * nb);
+    }
+}
+
+/// Looplicht (scanner): een rode kop die heen en weer over de schutting loopt, met een uitdovende staart.
+/// - Een lamp is "aan" (BrightnessMax) als de kop binnen Width/2 lampplaatsen is, anders "uit" (BrightnessMin).
+///   Dat zijn 2 opdrachten per lamp per doorgang; de ingebouwde ~1 s fade van de lamp maakt het oplichten en de
+///   staart. Zonder vooruitkijken, zodat de staart áchter de kop valt.
+/// - Bij de uiteinden remt de kop af en draait om (cosinus-verloop).
+/// - Het gat tussen GapStart en GapEnd (hek + lantaarnpaal) wordt dichtgeschoven: de kop springt van de laatste
+///   lamp vóór het gat direct naar de eerste erna, i.p.v. ~1 s te "verdwijnen".
+public sealed record ScannerEffect : Effect
+{
+    public double Hue { get; init; } = 0;
+    public double Saturation { get; init; } = 100;
+    public double BrightnessMax { get; init; } = 100;
+    public double BrightnessMin { get; init; } = 1;
+    /// Seconden voor één doorgang van het ene uiteinde naar het andere.
+    public double SweepS { get; init; } = 5;
+    /// Breedte van de kop in lampplaatsen.
+    public double Width { get; init; } = 1.5;
+    public double FenceStart { get; init; } = 0;
+    public double FenceEnd { get; init; } = 14;
+    /// Laatste positie vóór en eerste positie ná het gat (huidige lamps.json: L09 = 8, L10 = 11).
+    public double GapStart { get; init; } = 8;
+    public double GapEnd { get; init; } = 11;
+
+    [JsonIgnore] public override bool UsesLampFade => true;
+    [JsonIgnore] public override bool UsesLookahead => false;
+    [JsonIgnore] public override TimeSpan? PreferredInterval => TimeSpan.FromMilliseconds(100);
+
+    /// Positie met het gat dichtgeschoven (lampen erna schuiven op tot ze één plaats na GapStart staan).
+    double Collapse(double pos) => pos >= GapEnd ? pos - (GapEnd - GapStart - 1) : pos;
+
+    /// Waar de kop is op tijd t (in dichtgeschoven posities).
+    public double HeadAt(double t)
+    {
+        double a = Collapse(FenceStart), b = Collapse(FenceEnd);
+        double cycle = t / SweepS;
+        double pass = Math.Floor(cycle);
+        double e = (1 - Math.Cos(Math.PI * (cycle - pass))) / 2;   // 0..1, langzaam bij de uiteinden
+        return ((long)pass % 2 == 0) ? a + e * (b - a) : b - e * (b - a);
+    }
+
+    public override Hsv Evaluate(LampPoint lamp, double t)
+    {
+        bool on = !lamp.IsLantern && Math.Abs(Collapse(lamp.Pos) - HeadAt(t)) <= Width / 2;
+        return new Hsv(Hue, Saturation, on ? BrightnessMax : BrightnessMin);
     }
 }
 

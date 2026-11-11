@@ -11,6 +11,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Configuration;
+using Tuinverlichting.Scenes;
 using Tuinverlichting.Tapo;
 using Tuinverlichting.Tapo.Tpap;
 
@@ -79,17 +80,24 @@ switch (command)
                 args.Length > 2 ? double.Parse(args[2]) : 20)
             : 1;
     case "scene" when args.Length > 1:
-        // scene <golf-lantaarn|vuur|golf|lantaarnnacht> [duur s=120]  -- één scène, fadet in vanuit de huidige kleur (10 s)
-        return Password() is { } pw4
-            ? await Fence.SceneDemoCommand(pw4, args.Length > 2 ? double.Parse(args[2]) : 120, 10, args[1].ToLowerInvariant())
-            : 1;
+        // scene <golf-lantaarn|vuur|golf|lantaarnnacht|looplicht> [duur s=120] [looplicht: s per doorgang=5]
+        // -- één scène, fadet in vanuit de huidige kleur (10 s)
+        {
+            var name = args[1].ToLowerInvariant();
+            Effect? custom = name == "looplicht" && args.Length > 3
+                ? new ScannerEffect { SweepS = double.Parse(args[3], System.Globalization.CultureInfo.InvariantCulture) }
+                : null;
+            return Password() is { } pw4
+                ? await Fence.SceneDemoCommand(pw4, args.Length > 2 ? double.Parse(args[2]) : 120, 10, name, custom)
+                : 1;
+        }
     default:
         Console.WriteLine("Gebruik: TapoProbe discover [broadcast] | selftest | login [ip ...] | control <ip>\n" +
                           "         | fade <ip> <hue> <sat> <bri> [transition] | wave <ip> [periode s] [interval ms] [transition ms] [duur s]\n" +
                           "         | raw <ip> <method> [json] [wait ms] ...\n" +
                           "         | wavemark <ip> [periode] [interval] [duur] [beide|tint|hel] | fadetest <ip> [duur]\n" +
                           "         | connectall | fencewave [periode s=10] [duur s=90] [interval ms=700] [tint min=190] [tint max=240] [golflengte=10]\n" +
-                          "         | scenedemo [deel s=60] [crossfade s=20] | scene <golf-lantaarn|vuur|golf|lantaarnnacht> [duur s=120]");
+                          "         | scenedemo [deel s=60] [crossfade s=20] | scene <golf-lantaarn|vuur|golf|lantaarnnacht|looplicht> [duur s=120] [looplicht: s per doorgang]");
         return 1;
 }
 

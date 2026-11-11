@@ -191,6 +191,12 @@ of Homebridge (scènes als HomeKit-schakelaars).
     Eerste keer L535 in kleur aangestuurd: werkt (hue/sat/brightness, color_temp 0); terugzetten naar
     color_temp 6310 werkt (lamp meldt daarna nog de oude hue/sat, maar staat in witmodus). 38 tests.
     Droge run 8 s: 15/15, 0 fouten. **Wim: "mooi"** (2026-11-11).
+  - Scène **Looplicht** (`ScannerEffect`, JSON "looplicht"): rode kop heen en weer (SweepS 5 s per doorgang,
+    cosinus-afremming bij de uiteinden), Width 1,5 plaats; lamp binair aan (100%) / uit (1%) → ~2 opdrachten per
+    lamp per doorgang, de ingebouwde ~1 s fade maakt oplichten + staart. `Effect.UsesLookahead = false` zodat de
+    staart áchter de kop valt (engine evalueert dan op t i.p.v. t+1 s). Gat L09–L10 dichtgeschoven (GapStart 8,
+    GapEnd 11). PreferredInterval 100 ms. `TapoProbe scene looplicht [duur] [s per doorgang]`. 42 tests.
+    Droge run 10 s: 13/13, 0 fouten. **Wim: "mooi"** (2026-11-11, 5 s per doorgang).
   - `TapoProbe scene <golf-lantaarn|vuur|golf> [duur s=120]`: één scène los bekijken.
   - Git: credential.helper = wincred (globaal) → token na volgende push bewaard in Windows Referentiebeheer.
 - Daarna: ASP.NET Core-host met API (POST /api/scenes/{naam}/start, /api/stop) en portal, scènes als JSON,

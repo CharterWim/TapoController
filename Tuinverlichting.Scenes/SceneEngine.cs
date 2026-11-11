@@ -107,14 +107,14 @@ public sealed class SceneEngine
             progress = _fadeDuration <= 0 ? 1 : Math.Clamp((t - _fadeStart) / _fadeDuration, 0, 1);
         }
 
-        double te = t + Options.LookaheadS;
+        double Te(Effect e) => e.UsesLookahead ? t + Options.LookaheadS : t;
         Hsv target;
         if (to is null)
             target = l.Last ?? l.Initial ?? new Hsv(0, 0, 1);
         else
         {
-            var b = to.Evaluate(l.Point, te);
-            var a = from?.Evaluate(l.Point, te) ?? l.Initial ?? b;
+            var b = to.Evaluate(l.Point, Te(to));
+            var a = from is null ? l.Initial ?? b : from.Evaluate(l.Point, Te(from));
             double s = progress * progress * (3 - 2 * progress);   // smoothstep
             target = Hsv.Lerp(a, b, s);
         }

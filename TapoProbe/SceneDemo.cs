@@ -13,12 +13,14 @@ static partial class Fence
         ("vuur", "Smeulend vuur (rood/oranje)", new FireEffect()),
         ("golf", "Golf L01 -> L13 (blauw, lang verloop)", new WaveEffect { Direction = WaveDirection.Forward, PeriodS = 30, Wavelength = 30 }),
         ("lantaarnnacht", "Lantaarnnacht (maanlicht + ademende lantaarn, met lantaarns)", new LanternNightEffect()),
+        ("looplicht", "Looplicht (rode kop heen en weer, 5 s per doorgang)", new ScannerEffect()),
     ];
 
     /// Lantaarns doen alleen mee als een gekozen scène ze een eigen rol geeft; anders blijven ze op hun basisstand.
     static bool UsesLanterns(Effect e) => e is LanternNightEffect;
 
-    public static async Task<int> SceneDemoCommand(string password, double partS, double fadeS, string? only = null)
+    public static async Task<int> SceneDemoCommand(string password, double partS, double fadeS, string? only = null,
+        Effect? custom = null)
     {
         if (only is not null && !Scenes.Any(s => s.Key == only))
         {
@@ -27,7 +29,7 @@ static partial class Fence
         }
         var cfg = LoadConfig();
         var scenes = Scenes.Where(s => only is null ? !UsesLanterns(s.Effect) : s.Key == only)
-            .Select(s => (s.Name, s.Effect)).ToArray();
+            .Select(s => (s.Name, Effect: custom ?? s.Effect)).ToArray();
         var configs = scenes.Any(s => UsesLanterns(s.Effect)) ? cfg.Lamps.Concat(cfg.Lanterns).ToArray() : cfg.Lamps;
         Console.WriteLine($"{configs.Length} lampen verbinden ...");
         var lamps = await ConnectAll(configs, password);
